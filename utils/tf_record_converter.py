@@ -2,6 +2,7 @@ import argparse
 import base64
 import csv
 import os
+import random
 
 import contextlib2
 import tensorflow as tf
@@ -105,6 +106,7 @@ def read_rows():
 
 if __name__ == '__main__':
     rows = read_rows()
+    random.shuffle(rows)
     split_idx = int(len(rows) * args.split)
     
     create_training(rows[:split_idx])
