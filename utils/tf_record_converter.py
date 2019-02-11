@@ -96,7 +96,7 @@ def create_val(rows):
 def read_rows():
     rows = []
     with open(args.labels, 'r') as csv_file:
-        csv_reader = csv_reader(csv_file)
+        csv_reader = csv.reader(csv_file)
         fields = csv_reader.__next__()
         for row in csv_reader:
             row = row[:1] + list(map(int, row[1:]))
