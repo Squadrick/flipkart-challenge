@@ -12,6 +12,7 @@ parser.add_argument('--images', type=str, help='Location of images folder')
 parser.add_argument('--labels', type=str, help='CSV file containing the image names and box coordinates')
 parser.add_argument('--output_path', type=str, help='The newly created TF Record file(s)')
 parser.add_argument('--shards', type=int, help='Number of shards to split the dataset into, -1 for no sharding', default = 1)
+parser.add_argument('--split', type=float, help='Ratio of spliting training and validation data')
 args = parser.parse_args()
 
 def int64_feature(value):
@@ -72,22 +73,39 @@ def create_tf_record_sample(file_name, x1, x2, y1, y2):
 
     return tf_example
 
-def create_tf_record():
+def create_training(rows):
     tf_record_close_stack = contextlib2.ExitStack()
     output_tf_records = open_sharded_output_tfrecords(
             tf_record_close_stack, args.output_path, args.shards)
-    with open(args.labels, 'r') as csv_file:
-        csv_reader = csv.reader(csv_file)
-        fields = csv_reader.__next__()
-        for index, row in enumerate(tqdm.tqdm(csv_reader)):
-            row = row[:1] + list(map(int, row[1:]))
-            tf_record_sample = create_tf_record_sample(*row)
-            output_tf_record = output_tf_records[index % args.shards]
-            output_tf_record.write(tf_record_sample.SerializeToString())
+
+    for index, row in enumerate(tqdm.tqdm(rows)):
+        tf_record_sample = create_tf_record_sample(*row)
+        output_tf_record = output_tf_records[index % args.shards]
+        output_tf_record.write(tf_record_sample.SerializeToString())
 
     for tf_record in output_tf_records:
         tf_record.close()
 
+def create_val(rows):
+    output_tf_record = tf.python_io.TFRecordWriter(args.output_path + 'val')
+
+    for row in tqdm.tqdm(rows):
+        tf_record_sample = create_tf_record_sample(*row)
+        output_tf_record.write(tf_record_sample.SerializeToString())
+
+def read_rows():
+    rows = []
+    with open(args.labels, 'r') as csv_file:
+        csv_reader = csv_reader(csv_file)
+        fields = csv_reader.__next__()
+        for row in csv_reader:
+            row = row[:1] + list(map(int, row[1:]))
+            rows.append(row)
+    return rows
 
 if __name__ == '__main__':
-    create_tf_record()
+    rows = read_rows()
+    split_idx = int(len(rows) * args.split)
+    
+    create_training(rows[:split_idx])
+    create_val(row[split_idx:])
