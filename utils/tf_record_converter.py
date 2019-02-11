@@ -110,4 +110,4 @@ if __name__ == '__main__':
     split_idx = int(len(rows) * args.split)
     
     create_training(rows[:split_idx])
-    create_val(row[split_idx:])
+    create_val(rows[split_idx:])
