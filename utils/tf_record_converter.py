@@ -84,7 +84,6 @@ def create_tf_record():
             tf_record_sample = create_tf_record_sample(*row)
             output_tf_record = output_tf_records[index % args.shards]
             output_tf_record.write(tf_record_sample.SerializeToString())
-            print(index)
 
     for tf_record in output_tf_records:
         tf_record.close()
