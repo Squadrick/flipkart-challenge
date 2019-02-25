@@ -67,7 +67,7 @@ def create_shard_dataset(rows, shards, output_path):
 
     for index, row in enumerate(tqdm.tqdm(rows)):
         tf_record_sample = create_tf_record_sample(*row)
-        output_tf_record = output_tf_records[index % args.shards]
+        output_tf_record = output_tf_records[index % shards]
         output_tf_record.write(tf_record_sample.SerializeToString())
 
     for tf_record in output_tf_records:
@@ -79,7 +79,7 @@ def read_rows():
         csv_reader = csv.reader(csv_file)
         fields = csv_reader.__next__()
         for row in csv_reader:
-            row = row[:1] + list(map(int, row[1:]))
+            row = row[:1] + list(map(int, row[1:-1]))
             rows.append(row)
     return rows
 
@@ -88,5 +88,5 @@ if __name__ == '__main__':
     random.shuffle(rows)
     split_idx = int(len(rows) * args.split)
     
-    create_training(rows[:split_idx], args.train_output_path)
-    create_val(rows[split_idx:])
+    create_shard_dataset(rows[:split_idx], args.train_shards, args.train_output_path)
+    create_val_dataset(rows[:split_idx], args.val_shards, args.val_output_path)
