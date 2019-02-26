@@ -317,33 +317,32 @@ def main(unused_argv):
 
     start_timestamp = time.time()  # This time will include compilation time
 
-    else:
-      while current_step < TRAIN_STEPS:
-        # Train for up to steps_per_eval number of steps.
-        # At the end of training, a checkpoint will be written to --model_dir.
-        next_checkpoint = min(current_step + STEPS_PER_EVAL,
-                              TRAIN_STEPS)
-        resnet_classifier.train(
-            input_fn=train_dataset(), max_steps=next_checkpoint)
-        current_step = next_checkpoint
+    while current_step < TRAIN_STEPS:
+      # Train for up to steps_per_eval number of steps.
+      # At the end of training, a checkpoint will be written to --model_dir.
+      next_checkpoint = min(current_step + STEPS_PER_EVAL,
+                            TRAIN_STEPS)
+      resnet_classifier.train(
+          input_fn=train_dataset(), max_steps=next_checkpoint)
+      current_step = next_checkpoint
 
-        tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
-                        next_checkpoint, int(time.time() - start_timestamp))
-
-        # Evaluate the model on the most recent model in --model_dir.
-        # Since evaluation happens in batches of --eval_batch_size, some images
-        # may be excluded modulo the batch size. As long as the batch size is
-        # consistent, the evaluated images are also consistent.
-        tf.logging.info('Starting to evaluate.')
-        eval_results = resnet_classifier.evaluate(
-            input_fn=imagenet_eval.input_fn,
-            steps=NUM_VAL_IMAGES // BATCH_SIZE)
-        tf.logging.info('Eval results at step %d: %s',
-                        next_checkpoint, eval_results)
-
-      elapsed_time = int(time.time() - start_timestamp)
       tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
-                      TRAIN_STEPS, elapsed_time)
+                      next_checkpoint, int(time.time() - start_timestamp))
+
+      # Evaluate the model on the most recent model in --model_dir.
+      # Since evaluation happens in batches of --eval_batch_size, some images
+      # may be excluded modulo the batch size. As long as the batch size is
+      # consistent, the evaluated images are also consistent.
+      tf.logging.info('Starting to evaluate.')
+      eval_results = resnet_classifier.evaluate(
+          input_fn=imagenet_eval.input_fn,
+          steps=NUM_VAL_IMAGES // BATCH_SIZE)
+      tf.logging.info('Eval results at step %d: %s',
+                      next_checkpoint, eval_results)
+
+    elapsed_time = int(time.time() - start_timestamp)
+    tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
+                    TRAIN_STEPS, elapsed_time)
 
     if EXPORT_DIR is not None:
       # The guide to serve a exported TensorFlow model is at:
