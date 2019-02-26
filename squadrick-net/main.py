@@ -190,7 +190,7 @@ def resnet_model_fn(features, labels, mode, params):
   eval_metrics = None
   if mode == tf.estimator.ModeKeys.EVAL:
     def metric_fn(labels, logits):
-      mean_iou = squadricknet.bbox_overlap_iou(labels, logits)
+      mean_iou = resnet.bbox_overlap_iou(labels, logits)
 
       return {
           'iou': mean_iou,
@@ -260,8 +260,11 @@ def main():
     # At the end of training, a checkpoint will be written to --model_dir.
     next_checkpoint = min(current_step + STEPS_PER_EVAL,
                           TRAIN_STEPS)
+    
+    resnet_classifier.train(
+            input_fn=train_dataset,
+            max_steps = int(next_checkpoint))
     current_step = next_checkpoint
-
     tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
                     next_checkpoint, int(time.time() - start_timestamp))
 
@@ -269,12 +272,12 @@ def main():
     # Since evaluation happens in batches of --eval_batch_size, some images
     # may be excluded modulo the batch size. As long as the batch size is
     # consistent, the evaluated images are also consistent.
-    tf.logging.info('Starting to evaluate.')
-    eval_results = resnet_classifier.evaluate(
-        input_fn=imagenet_eval.input_fn,
-        steps=NUM_VAL_IMAGES // BATCH_SIZE)
-    tf.logging.info('Eval results at step %d: %s',
-                    next_checkpoint, eval_results)
+#    tf.logging.info('Starting to evaluate.')
+#    eval_results = resnet_classifier.evaluate(
+#        input_fn=valid_dataset,
+#        steps=NUM_VAL_IMAGES // BATCH_SIZE)
+#    tf.logging.info('Eval results at step %d: %s',
+#                    next_checkpoint, eval_results)
 
     elapsed_time = int(time.time() - start_timestamp)
     tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',

@@ -20,7 +20,6 @@ class InputProcessor(object):
       image: The encoded input image before processing.
     """
     self._image = tf.image.decode_image(image_str)
-    print(self._image)
     self._image.set_shape([HEIGHT, WIDTH, 3])
     self._box = box
 
@@ -99,6 +98,7 @@ class InputReader(object):
     dataset = dataset.shard(1, 0)
     dataset = dataset.repeat()
 
+
     def _prefetch_dataset(filename):
       buffer_size = 8 * 1024 * 1024 # 8 MiB per file
       dataset = tf.data.TFRecordDataset(filename, buffer_size=buffer_size)
@@ -112,14 +112,12 @@ class InputReader(object):
       dataset = dataset.shuffle(64)
 
     # Parse the fetched records to input tensors for model function.
-    
     dataset = dataset.apply(
       tf.data.experimental.map_and_batch(
         _dataset_parser, batch_size,
         PARALLEL_CALLS, True
       )
     )
-    return dataset
     def _set_shapes(images, boxes):
       images.set_shape([batch_size, HEIGHT, WIDTH, 3])
       boxes.set_shape([batch_size, 4])
