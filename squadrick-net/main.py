@@ -14,11 +14,6 @@ from config import *
 from dataloader import InputReader
 import resnet
 
-# The input tensor is in the range of [0, 255], we need to scale them to the
-# range of [0, 1]
-MEAN_RGB = [0.485 * 255, 0.456 * 255, 0.406 * 255]
-STDDEV_RGB = [0.229 * 255, 0.224 * 255, 0.225 * 255]
-
 
 def get_lr_schedule(train_steps, num_train_images, train_batch_size):
   """learning rate schedule."""
@@ -82,8 +77,8 @@ def resnet_model_fn(features, labels, mode, params):
     features = features['feature']
 
   # Normalize the image to zero mean and unit variance.
-  features -= tf.constant(MEAN_RGB, shape=[1, 1, 3], dtype=features.dtype)
-  features /= tf.constant(STDDEV_RGB, shape=[1, 1, 3], dtype=features.dtype)
+  features -= tf.constant(DATASET_MEAN, shape=[1, 1, 3], dtype=features.dtype)
+  features /= tf.constant(DATASET_VAR, shape=[1, 1, 3], dtype=features.dtype)
 
   # This nested function allows us to avoid duplicating the logic which
   # builds the network, for different values of --precision.

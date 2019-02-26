@@ -93,8 +93,7 @@ class InputReader(object):
     dataset = tf.data.Dataset.list_files(self._file_pattern, shuffle=self._is_training)
     dataset = dataset.shard(1, 0)
 
-    if self._is_training:
-      dataset = dataset.repeat()
+    dataset = dataset.repeat()
 
     def _prefetch_dataset(filename):
       buffer_size = 8 * 1024 * 1024 # 8 MiB per file
