@@ -279,14 +279,11 @@ def resnet_v1(resnet_depth, data_format='channels_last'):
       params['block'], params['layers'], data_format)
 
 
-def resnet(features,
+def model(features,
            resnet_depth=50,
            is_training_bn=True):
 
-  feats = resnet_fpn(features, min_level, max_level, resnet_depth,
-                     is_training_bn, use_nearest_upsampling)
-
-  with tf.variable_scope('retinanet'):
+  with tf.variable_scope('squadrick-net'):
     boxes = resnet_v1(resnet_depth)(features)
   return boxes
 

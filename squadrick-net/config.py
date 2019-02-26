@@ -1,30 +1,32 @@
-BATCH_SIZE = 64
-DATASET_MEAN = [0, 0, 0]
-DATASET_VAR = [1, 1, 1]
-TRAIN_SCALE_MIN = 1.0
+BATCH_SIZE = 64 
+DATASET_MEAN = [0.733, 0.734, 0.735] 
+DATASET_VAR = [0.1652,0.1654, 0.1658] 
+TRAIN_SCALE_MIN = 1.0 
 TRAIN_SCALE_MAX = 1.0
-USE_BFLOAT16 = True
-OUTPUT_SIZE = 640
+USE_BFLOAT16 = True 
+OUTPUT_SIZE = 640 
+HEIGHT = 480 
+WIDTH = 640
 PARALLEL_CALLS = 64
 
-TPU_ZONE = 
-GCP_PROJECT = 
-TPU = 
+TPU_ZONE = 'us-central1-f'
+GCP_PROJECT = 'tpus-230912'
+TPU = 'node-1'
 USE_TPU=True
-MODE = 'eval'
+MODE = 'train-and-eval'
 
-DATA_DIR = 'gs://tpu-buckets/dataset'
-TRAIN_DIR = DATA_DIR + '/train.*'
-VAL_DIR = DATA_DIR + '/val.*'
-EXPORT_DIR = 'gs:/tpu-buckets/export_dir'
+DATA_DIR = 'gs://tpu-buckets/tf-records'
+TRAIN_DIR = DATA_DIR + '/train*'
+VAL_DIR = DATA_DIR + '/val*'
+EXPORT_DIR = 'gs://tpu-buckets/export_dir'
 MODEL_DIR = 'gs://tpu-buckets/model_dir'
 
-RESNET_DEPTH = 200
+RESNET_DEPTH = 101
 PRECISION='bfloat16'
 SKIP_HOST_CALL = False
 
-NUM_TRAIN_IMAGES = 14000
-NUM_VAL_IMAGES = 5000
+NUM_TRAIN_IMAGES = 34200
+NUM_VAL_IMAGES = 3800
 EPOCHS = 30
 
 TRAIN_STEPS = (NUM_TRAIN_IMAGES * EPOCHS) // BATCH_SIZE

@@ -89,4 +89,4 @@ if __name__ == '__main__':
     split_idx = int(len(rows) * args.split)
     
     create_shard_dataset(rows[:split_idx], args.train_shards, args.train_output_path)
-    create_val_dataset(rows[:split_idx], args.val_shards, args.val_output_path)
+    create_shard_dataset(rows[split_idx:], args.val_shards, args.val_output_path)

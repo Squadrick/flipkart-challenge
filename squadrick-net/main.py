@@ -4,6 +4,16 @@ import time
 import numpy as np
 import tensorflow as tf
 
+from tensorflow.contrib import summary
+from tensorflow.contrib.tpu.python.tpu import async_checkpoint
+from tensorflow.contrib.training.python.training import evaluation
+from tensorflow.core.protobuf import rewriter_config_pb2
+from tensorflow.python.estimator import estimator
+
+from config import *
+from dataloader import InputReader
+import resnet
+
 # The input tensor is in the range of [0, 255], we need to scale them to the
 # range of [0, 1]
 MEAN_RGB = [0.485 * 255, 0.456 * 255, 0.406 * 255]
@@ -71,19 +81,6 @@ def resnet_model_fn(features, labels, mode, params):
   if isinstance(features, dict):
     features = features['feature']
 
-  # In most cases, the default data format NCHW instead of NHWC should be
-  # used for a significant performance boost on GPU/TPU. NHWC should be used
-  # only if the network needs to be run on CPU since the pooling operations
-  # are only supported on NHWC.
-  if DATA_FORMAT == 'channels_first':
-    assert not TRANSPOSE_INPUT    # channels_first only for GPU
-    features = tf.transpose(features, [0, 3, 1, 2])
-
-  if TRANSPOSE_INPUT and mode != tf.estimator.ModeKeys.PREDICT:
-    image_size = tf.sqrt(tf.shape(features)[0] / (3 * tf.shape(labels)[0]))
-    features = tf.reshape(features, [image_size, image_size, 3, -1])
-    features = tf.transpose(features, [3, 0, 1, 2])  # HWCN to NHWC
-
   # Normalize the image to zero mean and unit variance.
   features -= tf.constant(MEAN_RGB, shape=[1, 1, 3], dtype=features.dtype)
   features /= tf.constant(STDDEV_RGB, shape=[1, 1, 3], dtype=features.dtype)
@@ -91,12 +88,7 @@ def resnet_model_fn(features, labels, mode, params):
   # This nested function allows us to avoid duplicating the logic which
   # builds the network, for different values of --precision.
   def build_network():
-    network = resnet_model.resnet_v1(
-        resnet_depth=RESNET_DEPTH,
-        num_classes=4,
-        data_format=DATA_FORMAT)
-    return network(
-        inputs=features, is_training=(mode == tf.estimator.ModeKeys.TRAIN))
+    return resnet.model(features, RESNET_DEPTH, (mode==tf.estimator.ModeKeys.TRAIN))
 
   if PRECISION == 'bfloat16':
     with tf.contrib.tpu.bfloat16_scope():
@@ -116,9 +108,9 @@ def resnet_model_fn(features, labels, mode, params):
             'boxes': tf.estimator.export.PredictOutput(predictions)
         })
 
-  box_loss = squadricknet.box_loss(box_outputs, label)
+  box_loss = resnet.box_loss(logits, labels)
 
-  box_loss += _WEIGHT_DECAY * tf.add_n([
+  box_loss += WEIGHT_DECAY * tf.add_n([
       tf.nn.l2_loss(v)
       for v in tf.trainable_variables()
       if 'batch_normalization' not in v.name
@@ -147,7 +139,7 @@ def resnet_model_fn(features, labels, mode, params):
     # the train operation.
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
-      train_op = optimizer.minimize(loss, global_step)
+      train_op = optimizer.minimize(box_loss, global_step)
 
     if not SKIP_HOST_CALL:
       def host_call_fn(gs, loss, lr, ce):
@@ -191,7 +183,7 @@ def resnet_model_fn(features, labels, mode, params):
       # dimension. These Tensors are implicitly concatenated to
       # [params['batch_size']].
       gs_t = tf.reshape(global_step, [1])
-      loss_t = tf.reshape(loss, [1])
+      loss_t = tf.reshape(box_loss, [1])
       lr_t = tf.reshape(learning_rate, [1])
       ce_t = tf.reshape(current_epoch, [1])
 
@@ -231,13 +223,13 @@ def resnet_model_fn(features, labels, mode, params):
 
   return tf.contrib.tpu.TPUEstimatorSpec(
       mode=mode,
-      loss=loss,
+      loss=box_loss,
       train_op=train_op,
       host_call=host_call,
       eval_metrics=eval_metrics)
 
 
-def main(unused_argv):
+def main():
   tpu_cluster_resolver = tf.contrib.cluster_resolver.TPUClusterResolver(
       TPU, zone=TPU_ZONE, project=GCP_PROJECT)
 
@@ -283,7 +275,7 @@ def main(unused_argv):
       try:
         start_timestamp = time.time()  # This time will include compilation time
         eval_results = resnet_classifier.evaluate(
-            input_fn=valid_dataset(),
+            input_fn=valid_dataset,
             steps=eval_steps,
             checkpoint_path=ckpt)
         elapsed_time = int(time.time() - start_timestamp)
@@ -323,7 +315,7 @@ def main(unused_argv):
       next_checkpoint = min(current_step + STEPS_PER_EVAL,
                             TRAIN_STEPS)
       resnet_classifier.train(
-          input_fn=train_dataset(), max_steps=next_checkpoint)
+          input_fn=train_dataset, max_steps=int(next_checkpoint))
       current_step = next_checkpoint
 
       tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
@@ -355,4 +347,4 @@ def main(unused_argv):
 
 if __name__ == '__main__':
   tf.logging.set_verbosity(tf.logging.INFO)
-  app.run(main)
+  main()
