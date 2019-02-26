@@ -20,10 +20,12 @@ class InputProcessor(object):
       image: The encoded input image before processing.
     """
     self._image = tf.image.decode_image(image_str)
+    print(self._image)
+    self._image.set_shape([HEIGHT, WIDTH, 3])
     self._box = box
 
-    self._scaled_height = tf.shape(self._image)[0]
-    self._scaled_width = tf.shape(self._image)[1]
+    self._scaled_height = HEIGHT
+    self._scaled_width = WIDTH
 
   @staticmethod
   def _random_horizontal_flip(image, box):
@@ -79,8 +81,9 @@ class InputReader(object):
         data = tf.parse_single_example(value , keys_to_features)
         image_str = data['image/encoded']
         box = data['image/box']
-
+        
         input_processor = InputProcessor(image_str, box)
+        print("image:", input_processor._image)
         input_processor.resize_and_crop_box()
         if self._is_training:
           input_processor.random_horizontal_flip()
@@ -88,11 +91,12 @@ class InputReader(object):
         if USE_BFLOAT16:
           image = tf.cast(input_processor._image, tf.bfloat16)
           box = tf.cast(input_processor._box, tf.bfloat16)
+
+        
         return image, box
 
     dataset = tf.data.Dataset.list_files(self._file_pattern, shuffle=self._is_training)
     dataset = dataset.shard(1, 0)
-
     dataset = dataset.repeat()
 
     def _prefetch_dataset(filename):
@@ -108,14 +112,14 @@ class InputReader(object):
       dataset = dataset.shuffle(64)
 
     # Parse the fetched records to input tensors for model function.
-
+    
     dataset = dataset.apply(
       tf.data.experimental.map_and_batch(
         _dataset_parser, batch_size,
         PARALLEL_CALLS, True
       )
     )
-
+    return dataset
     def _set_shapes(images, boxes):
       images.set_shape([batch_size, HEIGHT, WIDTH, 3])
       boxes.set_shape([batch_size, 4])
@@ -124,5 +128,5 @@ class InputReader(object):
     dataset = dataset.map(
       _set_shapes, num_parallel_calls = PARALLEL_CALLS)
 
-    dataset = dataset.prefetch(-1)
+    dataset = dataset.prefetch(tf.contrib.data.AUTOTUNE)
     return dataset

@@ -16,6 +16,7 @@ parser.add_argument('--val_output_path', type=str, help='The newly created TF Re
 parser.add_argument('--train_shards', type=int, help='Number of shards to split the dataset into, -1 for no sharding', default = 1)
 parser.add_argument('--val_shards', type=int, help='Number of shards to split the dataset into, -1 for no sharding', default = 1)
 parser.add_argument('--split', type=float, help='Ratio of spliting training and validation data')
+parser.add_argument('--num', type=int, help='Number of rows to consider', default=1000)
 args = parser.parse_args()
 
 def int64_feature(value):
@@ -52,7 +53,8 @@ def create_tf_record_sample(file_name, x1, x2, y1, y2):
     height = 480.0
     width = 640.0
     box = [x1, y1, x2, y2]
-    encoded_cat_image_data = base64.b64encode(open(file_name, 'rb').read())
+    #encoded_cat_image_data = base64.b64encode(open(file_name, 'rb').read())
+    encoded_cat_image_data = open(file_name, 'rb').read()
     tf_example = tf.train.Example(features=tf.train.Features(feature={
         'image/encoded': bytes_feature(encoded_cat_image_data),
         'image/box': int64_list_feature(box),
@@ -86,6 +88,7 @@ def read_rows():
 if __name__ == '__main__':
     rows = read_rows()
     random.shuffle(rows)
+    rows = rows[:args.num]
     split_idx = int(len(rows) * args.split)
     
     create_shard_dataset(rows[:split_idx], args.train_shards, args.train_output_path)

@@ -190,24 +190,6 @@ def resnet_model_fn(features, labels, mode, params):
   eval_metrics = None
   if mode == tf.estimator.ModeKeys.EVAL:
     def metric_fn(labels, logits):
-      """Evaluation metric function. Evaluates accuracy.
-
-      This function is executed on the CPU and should not directly reference
-      any Tensors in the rest of the `model_fn`. To pass Tensors from the model
-      to the `metric_fn`, provide as part of the `eval_metrics`. See
-      https://www.tensorflow.org/api_docs/python/tf/contrib/tpu/TPUEstimatorSpec
-      for more information.
-
-      Arguments should match the list of `Tensor` objects passed as the second
-      element in the tuple passed to `eval_metrics`.
-
-      Args:
-        labels: `Tensor` with shape `[batch]`.
-        logits: `Tensor` with shape `[batch, num_classes]`.
-
-      Returns:
-        A dict of the metrics to return from evaluation.
-      """
       mean_iou = squadricknet.bbox_overlap_iou(labels, logits)
 
       return {
@@ -262,82 +244,41 @@ def main():
   steps_per_epoch = NUM_TRAIN_IMAGES // BATCH_SIZE
   eval_steps = NUM_VAL_IMAGES // BATCH_SIZE
 
-  if MODE == 'eval':
-    # Run evaluation when there's a new checkpoint
-    for ckpt in evaluation.checkpoints_iterator(
-        MODEL_DIR, 100):
-      tf.logging.info('Starting to evaluate.')
-      try:
-        start_timestamp = time.time()  # This time will include compilation time
-        eval_results = resnet_classifier.evaluate(
-            input_fn=valid_dataset,
-            steps=eval_steps,
-            checkpoint_path=ckpt)
-        elapsed_time = int(time.time() - start_timestamp)
-        tf.logging.info('Eval results: %s. Elapsed seconds: %d',
-                        eval_results, elapsed_time)
+  current_step = estimator._load_global_step_from_checkpoint_dir(MODEL_DIR)
+  steps_per_epoch = NUM_TRAIN_IMAGES // BATCH_SIZE
 
-        # Terminate eval job when final checkpoint is reached
-        current_step = int(os.path.basename(ckpt).split('-')[1])
-        if current_step >= TRAIN_STEPS:
-          tf.logging.info(
-              'Evaluation finished after training step %d', current_step)
-          break
+  tf.logging.info('Training for %d steps (%.2f epochs in total). Current'
+                  ' step %d.',
+                  TRAIN_STEPS,
+                  TRAIN_STEPS / STEPS_PER_EVAL,
+                  current_step)
 
-      except tf.errors.NotFoundError:
-        # Since the coordinator is on a different job than the TPU worker,
-        # sometimes the TPU worker does not finish initializing until long after
-        # the CPU job tells it to start evaluating. In this case, the checkpoint
-        # file could have been deleted already.
-        tf.logging.info(
-            'Checkpoint %s no longer exists, skipping checkpoint', ckpt)
+  start_timestamp = time.time()  # This time will include compilation time
 
-  else:
-    current_step = estimator._load_global_step_from_checkpoint_dir(MODEL_DIR)
-    steps_per_epoch = NUM_TRAIN_IMAGES // BATCH_SIZE
+  while current_step < TRAIN_STEPS:
+    # Train for up to steps_per_eval number of steps.
+    # At the end of training, a checkpoint will be written to --model_dir.
+    next_checkpoint = min(current_step + STEPS_PER_EVAL,
+                          TRAIN_STEPS)
+    current_step = next_checkpoint
 
-    tf.logging.info('Training for %d steps (%.2f epochs in total). Current'
-                    ' step %d.',
-                    TRAIN_STEPS,
-                    TRAIN_STEPS / STEPS_PER_EVAL,
-                    current_step)
+    tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
+                    next_checkpoint, int(time.time() - start_timestamp))
 
-    start_timestamp = time.time()  # This time will include compilation time
-
-    while current_step < TRAIN_STEPS:
-      # Train for up to steps_per_eval number of steps.
-      # At the end of training, a checkpoint will be written to --model_dir.
-      next_checkpoint = min(current_step + STEPS_PER_EVAL,
-                            TRAIN_STEPS)
-      resnet_classifier.train(
-          input_fn=train_dataset, max_steps=int(next_checkpoint))
-      current_step = next_checkpoint
-
-      tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
-                      next_checkpoint, int(time.time() - start_timestamp))
-
-      # Evaluate the model on the most recent model in --model_dir.
-      # Since evaluation happens in batches of --eval_batch_size, some images
-      # may be excluded modulo the batch size. As long as the batch size is
-      # consistent, the evaluated images are also consistent.
-      tf.logging.info('Starting to evaluate.')
-      eval_results = resnet_classifier.evaluate(
-          input_fn=imagenet_eval.input_fn,
-          steps=NUM_VAL_IMAGES // BATCH_SIZE)
-      tf.logging.info('Eval results at step %d: %s',
-                      next_checkpoint, eval_results)
+    # Evaluate the model on the most recent model in --model_dir.
+    # Since evaluation happens in batches of --eval_batch_size, some images
+    # may be excluded modulo the batch size. As long as the batch size is
+    # consistent, the evaluated images are also consistent.
+    tf.logging.info('Starting to evaluate.')
+    eval_results = resnet_classifier.evaluate(
+        input_fn=imagenet_eval.input_fn,
+        steps=NUM_VAL_IMAGES // BATCH_SIZE)
+    tf.logging.info('Eval results at step %d: %s',
+                    next_checkpoint, eval_results)
 
     elapsed_time = int(time.time() - start_timestamp)
     tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',
                     TRAIN_STEPS, elapsed_time)
-
-    if EXPORT_DIR is not None:
-      # The guide to serve a exported TensorFlow model is at:
-      #    https://www.tensorflow.org/serving/serving_basic
-      tf.logging.info('Starting to export model.')
-      resnet_classifier.export_saved_model(
-          export_dir_base=EXPORT_DIR,
-          serving_input_receiver_fn=imagenet_input.image_serving_input_fn)
 
 
 if __name__ == '__main__':
